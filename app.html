@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agora Multi-User Video Call</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Agora Web SDK -->
+    <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.2.js"></script>
+
+    <style>
+        /* Custom styles for the video grid and overall layout */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+        }
+        /* Style for the video player containers */
+        .video-player {
+            width: 100%;
+            height: 100%;
+            background-color: #2c2c2c;
+            border-radius: 0.75rem; /* 12px */
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .video-player > div {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        .video-label {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+        /* Dynamic grid layout for video streams */
+        #video-streams {
+            display: grid;
+            gap: 1rem; /* 16px */
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            transition: all 0.3s ease-in-out;
+        }
+        /* Custom button styling */
+        .control-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        .control-btn.active {
+            background-color: #4ade80; /* green-400 */
+        }
+         .control-btn.danger {
+            background-color: #f87171; /* red-400 */
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+    <header class="bg-gray-800/50 backdrop-blur-sm p-4 shadow-lg sticky top-0 z-20">
+        <h1 class="text-2xl font-bold text-center text-white">Agora Video Calling</h1>
+    </header>
+
+    <main class="flex-grow flex flex-col items-center justify-center p-4 md:p-6">
+        <!-- Connection Form -->
+        <div id="join-form" class="w-full max-w-md bg-gray-800 p-6 rounded-xl shadow-2xl space-y-4">
+            <h2 class="text-xl font-semibold text-center">Join a Channel</h2>
+            <div>
+                <label for="appid" class="block text-sm font-medium text-gray-300">Agora App ID</label>
+                <input type="text" id="appid" placeholder="Enter your App ID" class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500 text-white">
+            </div>
+            <div>
+                <label for="token" class="block text-sm font-medium text-gray-300">Token (Optional)</label>
+                <input type="text" id="token" placeholder="Enter your Token" class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500 text-white">
+            </div>
+            <div>
+                <label for="channel" class="block text-sm font-medium text-gray-300">Channel Name</label>
+                <input type="text" id="channel" placeholder="Enter a channel name" class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500 text-white">
+            </div>
+            <button id="join-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg text-lg control-btn">Join</button>
+        </div>
+
+        <!-- Video Streams and Controls -->
+        <div id="stream-wrapper" class="w-full h-full flex-grow flex-col items-center hidden">
+            <!-- Video Grid -->
+            <div id="video-streams" class="w-full flex-grow p-4">
+                <!-- Local and remote video streams will be dynamically added here -->
+            </div>
+
+            <!-- Controls -->
+            <div id="stream-controls" class="bg-gray-800/70 backdrop-blur-md p-4 rounded-xl shadow-lg flex justify-center items-center gap-4 mt-4">
+                <button id="mic-btn" class="control-btn bg-gray-600 p-3 rounded-full text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                </button>
+                <button id="camera-btn" class="control-btn bg-gray-600 p-3 rounded-full text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.55a1.5 1.5 0 01.84 1.35V18a1.5 1.5 0 01-1.5 1.5H5.15A1.5 1.5 0 013.65 18v-5.3a1.5 1.5 0 01.84-1.35L9 10m0 0l-1.3-1.3a1.5 1.5 0 010-2.12l1.3-1.3a1.5 1.5 0 012.12 0l1.3 1.3a1.5 1.5 0 010 2.12L15 10z" />
+                    </svg>
+                </button>
+                <button id="leave-btn" class="control-btn danger bg-red-500 hover:bg-red-600 p-3 rounded-full text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- Configuration ---
+        const APP_ID = ""; // You can set your App ID here to skip the form
+        const TOKEN = ""; // You can set your Token here
+        const CHANNEL = ""; // You can set your Channel here
+
+        const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+
+        let localTracks = {
+            videoTrack: null,
+            audioTrack: null
+        };
+        let remoteUsers = {};
+        let uid;
+
+        // --- DOM Elements ---
+        const joinForm = document.getElementById("join-form");
+        const streamWrapper = document.getElementById("stream-wrapper");
+        const videoStreamsContainer = document.getElementById("video-streams");
+
+        // --- Core Functions ---
+
+        /**
+         * @name join
+         * @description Handles joining the channel, creating and publishing local tracks.
+         */
+        let join = async () => {
+            // Read values from the form
+            const appId = document.getElementById("appid").value || APP_ID;
+            const token = document.getElementById("token").value || TOKEN;
+            const channel = document.getElementById("channel").value || CHANNEL;
+
+            if (!appId || !channel) {
+                alert("App ID and Channel Name are required.");
+                return;
+            }
+
+            // Set up event listeners for remote users
+            client.on("user-published", handleUserPublished);
+            client.on("user-unpublished", handleUserUnpublished);
+            client.on("user-left", handleUserLeft);
+
+            try {
+                // Join the channel
+                uid = await client.join(appId, channel, token || null, null);
+
+                // Create local audio and video tracks
+                [localTracks.audioTrack, localTracks.videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
+
+                // Create a player for the local video
+                const localPlayerContainer = document.createElement("div");
+                localPlayerContainer.id = `user-container-${uid}`;
+                localPlayerContainer.className = "video-player aspect-video";
+                videoStreamsContainer.append(localPlayerContainer);
+                
+                const label = document.createElement('div');
+                label.className = 'video-label';
+                label.textContent = `You (${uid})`;
+                localPlayerContainer.append(label);
+
+                // Play the local video
+                localTracks.videoTrack.play(localPlayerContainer);
+
+                // Publish local tracks to the channel
+                await client.publish(Object.values(localTracks));
+                console.log("Publish success!");
+
+                // Update UI
+                joinForm.style.display = "none";
+                streamWrapper.style.display = "flex";
+                document.getElementById('mic-btn').classList.add('active');
+                document.getElementById('camera-btn').classList.add('active');
+
+            } catch (error) {
+                console.error("Failed to join channel or publish tracks", error);
+                alert("Failed to join. Check console for details.");
+            }
+        };
+
+        /**
+         * @name leave
+         * @description Handles leaving the channel and cleaning up resources.
+         */
+        let leave = async () => {
+            // Stop and close local tracks
+            for (let trackName in localTracks) {
+                let track = localTracks[trackName];
+                if (track) {
+                    track.stop();
+                    track.close();
+                    localTracks[trackName] = null;
+                }
+            }
+
+            // Remove remote users' video containers
+            const remotePlayers = document.querySelectorAll('.remote-player');
+            remotePlayers.forEach(player => player.remove());
+            
+            // Remove local user's video container
+            document.getElementById(`user-container-${uid}`)?.remove();
+
+            // Leave the channel
+            await client.leave();
+            console.log("Client left channel successfully.");
+
+            // Update UI
+            joinForm.style.display = "block";
+            streamWrapper.style.display = "none";
+        };
+
+        /**
+         * @name handleUserPublished
+         * @description Subscribes to a remote user's stream when they publish.
+         * @param {object} user - The remote user object from Agora.
+         * @param {string} mediaType - 'audio' or 'video'.
+         */
+        const handleUserPublished = async (user, mediaType) => {
+            // Store the remote user
+            remoteUsers[user.uid] = user;
+            
+            // Subscribe to the remote user's stream
+            await client.subscribe(user, mediaType);
+            console.log(`Subscribed to ${mediaType} from user ${user.uid}`);
+
+            if (mediaType === 'video') {
+                // Check if a player container already exists
+                let playerContainer = document.getElementById(`user-container-${user.uid}`);
+                if (playerContainer === null) {
+                    playerContainer = document.createElement('div');
+                    playerContainer.id = `user-container-${user.uid}`;
+                    playerContainer.className = 'video-player remote-player aspect-video';
+                    
+                    const label = document.createElement('div');
+                    label.className = 'video-label';
+                    label.textContent = `User ${user.uid}`;
+                    playerContainer.append(label);
+
+                    videoStreamsContainer.append(playerContainer);
+                }
+                
+                // Play the remote video track
+                user.videoTrack.play(playerContainer);
+            }
+
+            if (mediaType === 'audio') {
+                // Play the remote audio track
+                user.audioTrack.play();
+            }
+        };
+
+        /**
+         * @name handleUserUnpublished
+         * @description Handles when a remote user unpublishes their stream.
+         * @param {object} user - The remote user object from Agora.
+         */
+        const handleUserUnpublished = (user, mediaType) => {
+            console.log(`User ${user.uid} unpublished their ${mediaType} track.`);
+            if (mediaType === 'video') {
+                const playerContainer = document.getElementById(`user-container-${user.uid}`);
+                if (playerContainer) {
+                    playerContainer.remove();
+                }
+            }
+        };
+
+        /**
+         * @name handleUserLeft
+         * @description Removes the video container of a user who has left the channel.
+         * @param {object} user - The remote user object from Agora.
+         */
+        const handleUserLeft = (user) => {
+            console.log(`User ${user.uid} has left the channel.`);
+            delete remoteUsers[user.uid];
+            const playerContainer = document.getElementById(`user-container-${user.uid}`);
+            if (playerContainer) {
+                playerContainer.remove();
+            }
+        };
+        
+        /**
+         * @name toggleMic
+         * @description Toggles the local audio track on and off.
+         */
+        const toggleMic = async (e) => {
+            const button = e.currentTarget;
+            if (localTracks.audioTrack) {
+                const isEnabled = localTracks.audioTrack.enabled;
+                await localTracks.audioTrack.setEnabled(!isEnabled);
+                button.classList.toggle('active', !isEnabled);
+                 button.classList.toggle('danger', isEnabled);
+            }
+        };
+
+        /**
+         * @name toggleCamera
+         * @description Toggles the local video track on and off.
+         */
+        const toggleCamera = async (e) => {
+            const button = e.currentTarget;
+            if (localTracks.videoTrack) {
+                const isEnabled = localTracks.videoTrack.enabled;
+                await localTracks.videoTrack.setEnabled(!isEnabled);
+                button.classList.toggle('active', !isEnabled);
+                button.classList.toggle('danger', isEnabled);
+            }
+        };
+
+        // --- Event Listeners ---
+        document.getElementById("join-btn").addEventListener("click", join);
+        document.getElementById("leave-btn").addEventListener("click", leave);
+        document.getElementById("mic-btn").addEventListener("click", toggleMic);
+        document.getElementById("camera-btn").addEventListener("click", toggleCamera);
+
+        // --- Auto-fill form for easy testing ---
+        document.getElementById("appid").value = APP_ID;
+        document.getElementById("token").value = TOKEN;
+        document.getElementById("channel").value = CHANNEL;
+
+    </script>
+</body>
+</html>
